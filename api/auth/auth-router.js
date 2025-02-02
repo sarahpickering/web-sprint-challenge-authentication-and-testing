@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const User = require('../users/users-model');
 const bcrypt = require('bcryptjs');
-const { BCRYPT_ROUNDS, JWT_SECRET } = require ('../secrets/secrets');
+const { JWT_SECRET } = require ('../secrets/secrets');
 const jwt = require('jsonwebtoken');
 
 router.post("/register", async (req, res, next) => {
@@ -12,16 +12,19 @@ router.post("/register", async (req, res, next) => {
     }
     const existingUser = await User.findBy({ username }).first();
     if (existingUser) {
-      res.status(400).json({ message: "username taken" });
+      return res.status(400).json({ message: "username taken" });
     }
     const hash = await bcrypt.hash(password, 7);
-    User.inster({ username, password: hash }).then((user) => {
-      res.status(201).json(user);
+    const newUser = await User.insert({ username, password: hash })
+    res.status(201).json({
+      id: newUser.id,
+      username: newUser.username, // Ensure `username` is included in the response
+      password: newUser.password, // Hashed password for verification
     });
   } catch (error) {
     next(error);
   }
-  res.end("implement register, please!");
+});
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
@@ -47,10 +50,25 @@ router.post("/register", async (req, res, next) => {
     4- On FAILED registration due to the `username` being taken,
       the response body should include a string exactly as follows: "username taken".
   */
-});
 
-router.post('/login', (req, res) => {
-  res.end('implement login, please!');
+router.post('/login', async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    if ( !username || !password ) {
+      return res
+      .status(400)
+      .json({ message: 'username and password required' })
+    }
+  const [user] = await User.findBy({ username });
+  if (user && bcrypt.compareSync(password, user.password)) {
+    const token = buildToken(user);
+    res.json({ message: `welcome, ${user.username}`, token })
+  } else {
+    res.status(401).json({ message: 'invalid credentials'});
+  }
+  } catch (error) {
+    next(error)
+  }
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
